@@ -2,7 +2,7 @@
   name = "ipfs-example"
 
 [global]
-  plan = "ipfs-example"
+  plan = "example"
   case = "example"
   total_instances = 2
   builder = "docker:go"
