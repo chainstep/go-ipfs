@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/testground/sdk-go/network"
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
 	"github.com/testground/sdk-go/sync"
 
 	bitswap "github.com/ipfs/go-bitswap"
-	"github.com/ipfs/go-bitswap/network"
+	bsnet "github.com/ipfs/go-bitswap/network"
 	block "github.com/ipfs/go-block-format"
 	datastore "github.com/ipfs/go-datastore"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -40,6 +41,9 @@ func main() {
 func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
+	tgc := sync.MustBoundClient(ctx, runenv)
+	tgnc := network.NewClient(tgc, runenv)
+	tgnc.MustWaitNetworkInitialized(ctx)
 	listen, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
 		return err
@@ -53,7 +57,7 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 		return err
 	}
 	bstore := blockstore.NewBlockstore(datastore.NewMapDatastore())
-	ex := bitswap.New(ctx, network.NewFromIpfsHost(h, kad), bstore)
+	ex := bitswap.New(ctx, bsnet.NewFromIpfsHost(h, kad), bstore)
 
 	switch runenv.TestGroupID {
 	case "providers":
