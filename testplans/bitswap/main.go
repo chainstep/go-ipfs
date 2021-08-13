@@ -1,4 +1,4 @@
-package main
+prunning requestorackage main
 
 import (
 	"context"
@@ -36,6 +36,7 @@ func main() {
 }
 
 func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
+	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
 	h, err := libp2p.New(ctx, libp2p.ListenAddrStrings())
 	if err != nil {
@@ -50,10 +51,14 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 
 	switch runenv.TestGroupID {
 	case "providers":
+
+		runenv.RecordMessage("running provider")
 		err = runProvide(ctx, runenv, h, bstore, ex)
 	case "requestors":
+		runenv.RecordMessage("running requestor")
 		err = runRequest(ctx, runenv, h, bstore, ex)
 	default:
+		runenv.RecordMessage("not part of a group")
 		err = errors.New("unknown test group id")
 	}
 	return err

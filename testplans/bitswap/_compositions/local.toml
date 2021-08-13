@@ -1,0 +1,31 @@
+[metadata]
+  name = "bitswap"
+
+[global]
+  plan = "bitswap"
+  case = "speed-test"
+  total_instances = 2
+  builder = "docker:go"
+  runner = "local:docker"
+
+[global.build_config]
+  push_registry=false
+
+[global.run.test_params]
+size      = "100MB"
+latencies = '["50ms", "100ms", "200ms"]'
+bandwidths = '["32MiB", "16MiB", "8MiB", "4MiB", "1MiB"]'
+
+[[groups]]
+  id = "providers"
+  instances = { count = 1 }
+  [groups.resources]
+    memory = "4096Mi"
+    cpu = "1000m"
+
+[[groups]]
+  id = "requestors"
+  instances = { count = 1 }
+  [groups.resources]
+    memory = "4096Mi"
+    cpu = "1000m"
