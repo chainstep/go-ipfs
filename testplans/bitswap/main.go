@@ -46,17 +46,17 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	tgnc.MustWaitNetworkInitialized(ctx)
 	listen, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to create multiaddr"))
 		return err
 	}
 	h, err := libp2p.New(ctx, libp2p.ListenAddrs(listen))
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to create libp2p host"))
 		return err
 	}
 	kad, err := dht.New(ctx, h)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to create dht"))
 		return err
 	}
 	bstore := blockstore.NewBlockstore(datastore.NewMapDatastore())
@@ -88,12 +88,12 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	blk := block.NewBlock(buf)
 	err := bstore.Put(blk)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to add block to datastore"))
 		return err
 	}
 	err = ex.HasBlock(blk)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to add block to exchange"))
 		return err
 	}
 	blkcid := blk.Cid().String()
@@ -108,12 +108,12 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	providers := make(chan string)
 	providerSub, err := tgc.Subscribe(ctx, providerTopic, providers)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to subscribe to providerTopic"))
 		return err
 	}
 	provider, err := ma.NewMultiaddr(<-providers)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to create provider from ProviderTopic"))
 		return err
 	}
 	providerSub.Done()
@@ -121,7 +121,7 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 
 	blockcidSub, err := tgc.Subscribe(ctx, blockTopic, blkcids)
 	if err != nil {
-		runenv.RecordFailure(err)
+		runenv.RecordFailure(errors.New("failed to subscribe to blockTopic"))
 		return err
 	}
 	defer blockcidSub.Done()
