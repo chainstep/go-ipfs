@@ -97,32 +97,23 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 }
 
 func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
+	tgc := sync.MustBoundClient(ctx, runenv)
+	blkcids := make(chan string)
+	providers := make(chan string)
+	providerSub, err := tgc.Subscribe(ctx, providerTopic, providers)
+	if err != nil {
+		return err
+	}
+	provider := <-providers
+	providerSub.Done()
+	blockcidSub, err := tgc.Subscribe(ctx, blockTopic, blkcids)
+	defer blockcidSub.Done()
+	runenv.RecordMessage("will contact the provider at %s", provider)
+	// tell the provider that we're ready to go
+	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
+
+	for blkcid := range blkcids {
+		runenv.RecordMessage("downloading block %s", blkcid)
+	}
 	return nil
 }
-
-// size := runenv.SizeParam("size")
-// bandwidths := runenv.SizeArrayParam("bandwidths")
-// var latencies []time.Duration
-// lats := runenv.StringArrayParam("latencies")
-// for _, l := range lats {
-// 	d, err := time.ParseDuration(l)
-// 	if err != nil {
-// 		runenv.RecordCrash(err)
-// 		panic(err)
-// 	}
-// 	latencies = append(latencies, d)
-// }
-// bandwidths = append([]uint64{0}, bandwidths...)
-// latencies = append([]time.Duration{0}, latencies...)
-
-// initCtx.MustWaitAllInstancesInitialized(ctx)
-// runenv.RecordMessage("all instances running")
-
-// switch runenv.TestGroupID {
-// case "providers":
-// 	runenv.RecordMessage("I'm a provider, serving a %d size file", size)
-// case "requesters":
-// 	runenv.RecordMessage("I'm a requester")
-// }
-// return nil
-// }
