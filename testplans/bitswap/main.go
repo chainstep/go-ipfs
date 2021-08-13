@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"github.com/testground/sdk-go/run"
@@ -18,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var (
@@ -26,9 +28,9 @@ var (
 	}
 	readyState    = sync.State("ready")
 	doneState     = sync.State("done")
-	listen        = "/ip4/0.0.0.0/tcp/9000"
 	providerTopic = sync.NewTopic("provider", "")
 	blockTopic    = sync.NewTopic("provider", "")
+	listen        string
 )
 
 func main() {
@@ -38,7 +40,11 @@ func main() {
 func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
-	h, err := libp2p.New(ctx, libp2p.ListenAddrStrings())
+	listen, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
+	if err != nil {
+		return err
+	}
+	h, err := libp2p.New(ctx, libp2p.ListenAddrs(listen))
 	if err != nil {
 		return err
 	}
@@ -66,17 +72,7 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	addrs, err := h.Network().InterfaceListenAddresses()
-	if err != nil {
-		return err
-	}
-
-	runenv.RecordMessage("what is addrs %s", addrs)
-	// tell the requestors where I am reachable
-	for _, a := range addrs {
-		tgc.MustPublish(ctx, providerTopic, a.String())
-	}
-	// wait until they are ready
+	tgc.MustPublish(ctx, providerTopic, listen)
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
@@ -84,7 +80,7 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	buf := make([]byte, size)
 	rand.Read(buf)
 	blk := block.NewBlock(buf)
-	err = bstore.Put(blk)
+	err := bstore.Put(blk)
 	if err != nil {
 		return err
 	}
@@ -113,7 +109,6 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	runenv.RecordMessage("will contact the provider at %s", provider)
 	// tell the provider that we're ready to go
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
-	runenv.RecordMessage("do I ever get here?")
 
 	for blkcid := range blkcids {
 		runenv.RecordMessage("downloading block %s", blkcid)
