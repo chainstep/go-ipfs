@@ -29,7 +29,7 @@ var (
 	readyState    = sync.State("ready")
 	doneState     = sync.State("done")
 	providerTopic = sync.NewTopic("provider", "")
-	blockTopic    = sync.NewTopic("provider", "")
+	blockTopic    = sync.NewTopic("blocks", "")
 	listen        ma.Multiaddr
 )
 
@@ -74,35 +74,28 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 }
 
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
-	runenv.RecordMessage("pos 1")
 	tgc := sync.MustBoundClient(ctx, runenv)
 	tgc.MustPublish(ctx, providerTopic, listen.String())
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
-	runenv.RecordMessage("pos 2")
 	size := runenv.SizeParam("size")
 	runenv.RecordMessage("generating %d-sized random block", size)
 	buf := make([]byte, size)
-	runenv.RecordMessage("pos 3")
 	rand.Read(buf)
 	blk := block.NewBlock(buf)
 	err := bstore.Put(blk)
-	runenv.RecordMessage("pos 4")
 	if err != nil {
 		runenv.RecordFailure(errors.New("failed to add block to datastore"))
 		return err
 	}
-	runenv.RecordMessage("pos 5")
 	err = ex.HasBlock(blk)
 	if err != nil {
 		runenv.RecordFailure(errors.New("failed to add block to exchange"))
 		return err
 	}
-	runenv.RecordMessage("pos 6")
 	blkcid := blk.Cid().String()
 	runenv.RecordMessage("publishing block %s", blkcid)
 	tgc.MustPublish(ctx, blockTopic, blkcid)
-	runenv.RecordMessage("pos 7")
 	return nil
 }
 
