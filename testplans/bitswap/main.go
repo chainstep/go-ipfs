@@ -40,7 +40,8 @@ func main() {
 func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
-	listen, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
+	var err error
+	listen, err = ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
 		runenv.RecordFailure(errors.New("failed to create multiaddr"))
 		return err
