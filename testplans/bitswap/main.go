@@ -13,11 +13,13 @@ import (
 	bitswap "github.com/ipfs/go-bitswap"
 	bsnet "github.com/ipfs/go-bitswap/network"
 	block "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
 	datastore "github.com/ipfs/go-datastore"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -28,8 +30,8 @@ var (
 	}
 	readyState    = sync.State("ready")
 	doneState     = sync.State("done")
-	providerTopic = sync.NewTopic("provider", "")
-	blockTopic    = sync.NewTopic("blocks", "")
+	providerTopic = sync.NewTopic("provider", &peer.AddrInfo{})
+	blockTopic    = sync.NewTopic("blocks", &cid.Cid{})
 	listen        ma.Multiaddr
 )
 
@@ -43,17 +45,14 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	var err error
 	listen, err = ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to create multiaddr"))
 		return err
 	}
 	h, err := libp2p.New(ctx, libp2p.ListenAddrs(listen))
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to create libp2p host"))
 		return err
 	}
 	kad, err := dht.New(ctx, h)
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to create dht"))
 		return err
 	}
 	bstore := blockstore.NewBlockstore(datastore.NewMapDatastore())
@@ -75,7 +74,8 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	tgc.MustPublish(ctx, providerTopic, listen.String())
+	ai, err := peer.AddrInfoFromP2pAddr(listen)
+	tgc.MustPublish(ctx, providerTopic, &ai)
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
@@ -83,50 +83,54 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	buf := make([]byte, size)
 	rand.Read(buf)
 	blk := block.NewBlock(buf)
-	err := bstore.Put(blk)
+	err = bstore.Put(blk)
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to add block to datastore"))
 		return err
 	}
 	err = ex.HasBlock(blk)
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to add block to exchange"))
 		return err
 	}
-	blkcid := blk.Cid().String()
-	runenv.RecordMessage("publishing block %s", blkcid)
-	tgc.MustPublish(ctx, blockTopic, blkcid)
+	blkcid := blk.Cid()
+	runenv.RecordMessage("publishing block %s", blkcid.String())
+	tgc.MustPublish(ctx, blockTopic, &blkcid)
 	return nil
 }
 
 func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	blkcids := make(chan string)
-	providers := make(chan string)
+	providers := make(chan *peer.AddrInfo)
+	blkcids := make(chan *cid.Cid)
 	providerSub, err := tgc.Subscribe(ctx, providerTopic, providers)
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to subscribe to providerTopic"))
 		return err
 	}
-	provider, err := ma.NewMultiaddr(<-providers)
-	if err != nil {
-		runenv.RecordFailure(errors.New("failed to create provider from ProviderTopic"))
-		return err
-	}
+	provider := <-providers
+
 	providerSub.Done()
 	runenv.RecordMessage("will contact the provider at %s", provider.String())
 
+	err = h.Connect(ctx, *provider)
+	if err != nil {
+		return err
+	}
+
 	blockcidSub, err := tgc.Subscribe(ctx, blockTopic, blkcids)
 	if err != nil {
-		runenv.RecordFailure(errors.New("failed to subscribe to blockTopic"))
 		return err
 	}
 	defer blockcidSub.Done()
+
 	// tell the provider that we're ready to go
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	for blkcid := range blkcids {
-		runenv.RecordMessage("downloading block %s", blkcid)
+		runenv.RecordMessage("downloading block %s", blkcid.String())
+		blk, err := ex.GetBlock(ctx, *blkcid)
+		if err != nil {
+			runenv.RecordFailure(err)
+		}
+		runenv.RecordMessage("downloaded block %s", blk.Cid().String())
 	}
 	return nil
 }
