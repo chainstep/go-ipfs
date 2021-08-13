@@ -70,6 +70,8 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	if err != nil {
 		return err
 	}
+
+	runenv.RecordMessage("what is addrs %s", addrs)
 	// tell the requestors where I am reachable
 	for _, a := range addrs {
 		tgc.MustPublish(ctx, providerTopic, a.String())
@@ -78,7 +80,7 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
-	runenv.RecordMessage("generating %s-sized random block", size)
+	runenv.RecordMessage("generating %d-sized random block", size)
 	buf := make([]byte, size)
 	rand.Read(buf)
 	blk := block.NewBlock(buf)
@@ -90,7 +92,7 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	if err != nil {
 		return err
 	}
-	blkcid := blk.String()
+	blkcid := blk.Cid().String()
 	runenv.RecordMessage("publishing block %s", blkcid)
 	tgc.MustPublish(ctx, blockTopic, blkcid)
 	return nil
@@ -111,6 +113,7 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	runenv.RecordMessage("will contact the provider at %s", provider)
 	// tell the provider that we're ready to go
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
+	runenv.RecordMessage("do I ever get here?")
 
 	for blkcid := range blkcids {
 		runenv.RecordMessage("downloading block %s", blkcid)
