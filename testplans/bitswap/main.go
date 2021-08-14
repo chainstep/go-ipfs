@@ -121,16 +121,18 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 		return err
 	}
 
-	runenv.RecordMessage("here connecting to this: %s", fmt.Sprintln(*ai))
+	runenv.RecordMessage("here connecting provider: %s", fmt.Sprintln(*ai))
 	providerSub.Done()
 
 	err = h.Connect(ctx, *ai)
 	if err != nil {
+		runenv.RecordFailure(errors.New("could not connect to provider"))
 		return err
 	}
 
 	blockcidSub, err := tgc.Subscribe(ctx, blockTopic, blkcids)
 	if err != nil {
+		runenv.RecordFailure(errors.New("could not subscribe to block sub"))
 		return err
 	}
 	defer blockcidSub.Done()
