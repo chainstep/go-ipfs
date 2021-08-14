@@ -120,6 +120,11 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 		return err
 	}
 
+	runenv.RecordMessage(ai.ID.String())
+	for _, a := range ai.Addrs {
+		runenv.RecordMessage(a.String())
+	}
+
 	providerSub.Done()
 
 	err = h.Connect(ctx, *ai)
