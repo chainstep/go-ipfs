@@ -16,5 +16,4 @@ name = "bitswap"
 
   [testcases.params]
   size = { type = "int", desc = "size of file to transfer, in human-friendly form", default = "1MiB" }
-  latencies = { type = "string", desc = "latencies to try with; comma-separated list of durations", default = '["100ms", "200ms", "300ms"]' }
-  bandwidths = { type = "string", desc = "bandwidths (egress bytes/s) to try with; comma-separated list of humanized sizes", default = '["10M", "1M", "512kb"]' }
+  count = { type = "int", desc = "number of transfers", default = "10" }

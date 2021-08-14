@@ -1,5 +1,5 @@
 [metadata]
-  name = "bitswap"
+  name = "bitswap-local-speed-test"
 
 [global]
   plan = "bitswap"
@@ -13,8 +13,7 @@
 
 [global.run.test_params]
 size      = "100MB"
-latencies = '["50ms", "100ms", "200ms"]'
-bandwidths = '["32MiB", "16MiB", "8MiB", "4MiB", "1MiB"]'
+count     = "10"
 
 [[groups]]
   id = "providers"

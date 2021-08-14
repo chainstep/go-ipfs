@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
@@ -79,21 +80,25 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
-	runenv.RecordMessage("generating %d-sized random block", size)
-	buf := make([]byte, size)
-	rand.Read(buf)
-	blk := block.NewBlock(buf)
-	err := bstore.Put(blk)
-	if err != nil {
-		return err
+	count := runenv.IntParam("count")
+	for i := 0; i <= count; i++ {
+		runenv.RecordMessage("generating %d-sized random block", size)
+		buf := make([]byte, size)
+		rand.Read(buf)
+		blk := block.NewBlock(buf)
+		err := bstore.Put(blk)
+		if err != nil {
+			return err
+		}
+		err = ex.HasBlock(blk)
+		if err != nil {
+			return err
+		}
+		blkcid := blk.Cid().String()
+		runenv.RecordMessage("publishing block %s", blkcid)
+		tgc.MustPublish(ctx, blockTopic, blkcid)
 	}
-	err = ex.HasBlock(blk)
-	if err != nil {
-		return err
-	}
-	blkcid := blk.Cid().String()
-	runenv.RecordMessage("publishing block %s", blkcid)
-	tgc.MustPublish(ctx, blockTopic, blkcid)
+	tgc.MustSignalAndWait(ctx, doneState, runenv.TestInstanceCount)
 	return nil
 }
 
@@ -131,28 +136,33 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	// tell the provider that we're ready to go
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
-	for blkcid := range blkcids {
+	begin := time.Now()
+	count := runenv.IntParam("count")
+	for i := 0; i <= count; i++ {
+		blkcid := <-blkcids
 		runenv.RecordMessage("downloading block %s", blkcid)
 		dec, err := multihash.Decode([]byte(blkcid))
 		if err != nil {
-			runenv.RecordFailure(err)
-			continue
+			return err
 		}
 		mh, err := multihash.Cast(dec.Digest)
 		if err != nil {
-			runenv.RecordFailure(err)
-			continue
+			return err
 		}
 		if err != nil {
-			runenv.RecordFailure(err)
-			continue
+			return err
 		}
+		dlBegin := time.Now()
 		blk, err := ex.GetBlock(ctx, cid.NewCidV0(mh))
 		if err != nil {
-			runenv.RecordFailure(err)
-			continue
+			return err
 		}
+		dlDuration := time.Since(dlBegin)
 		runenv.RecordMessage("downloaded block %s", blk.Cid().String())
+		runenv.RecordMessage("download time", dlDuration)
 	}
+	duration := time.Since(begin)
+	runenv.RecordMessage("total time", duration)
+	tgc.MustSignalEntry(ctx, doneState)
 	return nil
 }
