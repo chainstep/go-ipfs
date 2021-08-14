@@ -57,6 +57,9 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	if err != nil {
 		return err
 	}
+	for _, a := range h.Addrs() {
+		runenv.RecordMessage("listening on addr", a.String())
+	}
 	bstore := blockstore.NewBlockstore(datastore.NewMapDatastore())
 	ex := bitswap.New(ctx, bsnet.NewFromIpfsHost(h, kad), bstore)
 
