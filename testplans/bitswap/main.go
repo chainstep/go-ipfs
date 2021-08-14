@@ -21,7 +21,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	ma "github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multihash"
 )
 
 var (
@@ -30,9 +31,9 @@ var (
 	}
 	readyState    = sync.State("ready")
 	doneState     = sync.State("done")
-	providerTopic = sync.NewTopic("provider", &peer.AddrInfo{})
-	blockTopic    = sync.NewTopic("blocks", &cid.Cid{})
-	listen        ma.Multiaddr
+	providerTopic = sync.NewTopic("provider", "")
+	blockTopic    = sync.NewTopic("blocks", "")
+	listen        multiaddr.Multiaddr
 )
 
 func main() {
@@ -43,7 +44,7 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
 	var err error
-	listen, err = ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
+	listen, err = multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
 		return err
 	}
@@ -74,8 +75,7 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	ai, err := peer.AddrInfoFromP2pAddr(listen)
-	tgc.MustPublish(ctx, providerTopic, ai)
+	tgc.MustPublish(ctx, providerTopic, listen.String())
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
@@ -83,7 +83,7 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	buf := make([]byte, size)
 	rand.Read(buf)
 	blk := block.NewBlock(buf)
-	err = bstore.Put(blk)
+	err := bstore.Put(blk)
 	if err != nil {
 		return err
 	}
@@ -91,26 +91,33 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	if err != nil {
 		return err
 	}
-	blkcid := blk.Cid()
-	runenv.RecordMessage("publishing block %s", blkcid.String())
-	tgc.MustPublish(ctx, blockTopic, &blkcid)
+	blkcid := blk.Cid().String()
+	runenv.RecordMessage("publishing block %s", blkcid)
+	tgc.MustPublish(ctx, blockTopic, blkcid)
 	return nil
 }
 
 func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	providers := make(chan *peer.AddrInfo)
-	blkcids := make(chan *cid.Cid)
+	providers := make(chan string)
+	blkcids := make(chan string)
 	providerSub, err := tgc.Subscribe(ctx, providerTopic, providers)
 	if err != nil {
 		return err
 	}
-	provider := <-providers
+	provider, err := multiaddr.NewMultiaddr(<-providers)
+	if err != nil {
+		return err
+	}
 
 	providerSub.Done()
-	runenv.RecordMessage("will contact the provider at %s", provider.String())
+	runenv.RecordMessage("will contact the provider at %s", provider)
 
-	err = h.Connect(ctx, *provider)
+	ai, err := peer.AddrInfoFromP2pAddr(provider)
+	if err != nil {
+		return err
+	}
+	err = h.Connect(ctx, *ai)
 	if err != nil {
 		return err
 	}
@@ -125,10 +132,25 @@ func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	for blkcid := range blkcids {
-		runenv.RecordMessage("downloading block %s", blkcid.String())
-		blk, err := ex.GetBlock(ctx, *blkcid)
+		runenv.RecordMessage("downloading block %s", blkcid)
+		dec, err := multihash.Decode([]byte(blkcid))
 		if err != nil {
 			runenv.RecordFailure(err)
+			continue
+		}
+		mh, err := multihash.Cast(dec.Digest)
+		if err != nil {
+			runenv.RecordFailure(err)
+			continue
+		}
+		if err != nil {
+			runenv.RecordFailure(err)
+			continue
+		}
+		blk, err := ex.GetBlock(ctx, cid.NewCidV0(mh))
+		if err != nil {
+			runenv.RecordFailure(err)
+			continue
 		}
 		runenv.RecordMessage("downloaded block %s", blk.Cid().String())
 	}
