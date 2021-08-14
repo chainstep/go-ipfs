@@ -32,9 +32,8 @@ var (
 	}
 	readyState    = sync.State("ready")
 	doneState     = sync.State("done")
-	providerTopic = sync.NewTopic("provider", "")
+	providerTopic = sync.NewTopic("provider", &peer.AddrInfo{})
 	blockTopic    = sync.NewTopic("blocks", "")
-	listen        multiaddr.Multiaddr
 )
 
 func main() {
@@ -44,8 +43,7 @@ func main() {
 func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	runenv.RecordMessage("running speed-test")
 	ctx := context.Background()
-	var err error
-	listen, err = multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
+	listen, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/3333", runenv.TestSubnet.IP))
 	if err != nil {
 		return err
 	}
@@ -79,7 +77,11 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	tgc.MustPublish(ctx, providerTopic, listen.String())
+	ai := peer.AddrInfo{
+		ID:    h.ID(),
+		Addrs: h.Addrs(),
+	}
+	tgc.MustPublish(ctx, providerTopic, &ai)
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
@@ -107,24 +109,19 @@ func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore
 
 func runRequest(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
-	providers := make(chan string)
+	providers := make(chan *peer.AddrInfo)
 	blkcids := make(chan string)
 	providerSub, err := tgc.Subscribe(ctx, providerTopic, providers)
 	if err != nil {
 		return err
 	}
-	provider, err := multiaddr.NewMultiaddr(<-providers)
+	ai := <-providers
 	if err != nil {
 		return err
 	}
 
 	providerSub.Done()
-	runenv.RecordMessage("will contact the provider at %s", provider)
 
-	ai, err := peer.AddrInfoFromP2pAddr(provider)
-	if err != nil {
-		return err
-	}
 	err = h.Connect(ctx, *ai)
 	if err != nil {
 		return err
