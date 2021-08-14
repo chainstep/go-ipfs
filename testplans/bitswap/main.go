@@ -75,7 +75,7 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 func runProvide(ctx context.Context, runenv *runtime.RunEnv, h host.Host, bstore blockstore.Blockstore, ex exchange.Interface) error {
 	tgc := sync.MustBoundClient(ctx, runenv)
 	ai, err := peer.AddrInfoFromP2pAddr(listen)
-	tgc.MustPublish(ctx, providerTopic, &ai)
+	tgc.MustPublish(ctx, providerTopic, ai)
 	tgc.MustSignalAndWait(ctx, readyState, runenv.TestInstanceCount)
 
 	size := runenv.SizeParam("size")
