@@ -60,7 +60,8 @@ func runSpeedTest(runenv *runtime.RunEnv, initCtx *run.InitContext) error {
 	}
 	bstore := blockstore.NewBlockstore(datastore.NewMapDatastore())
 	ex := bitswap.New(ctx, bsnet.NewFromIpfsHost(h, kad), bstore)
-
+	// sleep a little to make sure listening is working
+	time.Sleep(10 * time.Second)
 	switch runenv.TestGroupID {
 	case "providers":
 		runenv.RecordMessage("running provider")
