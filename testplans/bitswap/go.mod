@@ -18,6 +18,7 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.2.8 // indirect
 	github.com/libp2p/go-libp2p-quic-transport v0.11.2 // indirect
 	github.com/multiformats/go-multiaddr v0.3.3
+	github.com/multiformats/go-multihash v0.0.15
 	github.com/polydawn/refmt v0.0.0-20201211092308-30ac6d18308e // indirect
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/testground/sdk-go v0.2.7
