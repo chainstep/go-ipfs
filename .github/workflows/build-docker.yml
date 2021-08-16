@@ -34,7 +34,7 @@ jobs:
           file: ./Dockerfile
           pull: true
           push: true
-          cache-from: type=registry,ref=chainstep/go-ipfs:latest
+          cache-from: type=registry,ref=ghcr.io/chainstep/kollektor/go-ipfs:latest
           cache-to: type=inline
           tags: |
-            chainstep/go-ipfs:0.8.0
+            ghcr.io/chainstep/kollektor/go-ipfs:0.8.0
